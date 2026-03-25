@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import mimetypes
 from pathlib import Path
-from flask import Flask, Response, request, abort, render_template_string, redirect
+from flask import Flask, Response, request, abort, render_template_string, redirect, url_for
 
 app = Flask(__name__)
 
@@ -26,6 +26,7 @@ MEDIA_ROOT        = Path("./media")
 CHUNK_SIZE        = 1024 * 1024   # 1 MB read chunks for native files
 TRANSCODE_BITRATE = "1500k"       # Video bitrate (lower = less CPU on phone)
 AUDIO_BITRATE     = "128k"        # Audio bitrate
+HIDDEN_NAMES      = {".gitkeep"}
 
 # Extensions the browser CANNOT play natively → must transcode
 TRANSCODE_EXTS = {
@@ -47,6 +48,8 @@ def safe_path(relative: str) -> Path:
     target = (base / relative).resolve()
     if not str(target).startswith(str(base)):
         abort(403)
+    if target.name in HIDDEN_NAMES:
+        abort(404)
     if not target.exists():
         abort(404)
     return target
@@ -250,7 +253,9 @@ def list_directory(rel_path: str, abs_path: Path):
             "streamable": False, "transcode": False,
         })
 
-    for item in sorted(abs_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
+    visible_items = [item for item in abs_path.iterdir() if item.name not in HIDDEN_NAMES]
+
+    for item in sorted(visible_items, key=lambda x: (not x.is_dir(), x.name.lower())):
         mime       = get_mime(item) if item.is_file() else ""
         transcode  = needs_transcode(item) if item.is_file() else False
         native     = is_native_streamable(item, mime) if item.is_file() else False
@@ -345,6 +350,20 @@ def info(rel_path):
     abs_path = safe_path(rel_path)
     duration = get_video_duration(abs_path)
     return {"duration": duration}
+
+
+@app.post("/delete/<path:rel_path>")
+def delete(rel_path):
+    """Delete a file from the media directory."""
+    abs_path = safe_path(rel_path)
+    if not abs_path.is_file():
+        abort(400)
+
+    abs_path.unlink()
+
+    parent = abs_path.parent.relative_to(MEDIA_ROOT.resolve())
+    parent_path = "" if str(parent) == "." else str(parent)
+    return redirect(url_for("browse", rel_path=parent_path))
 
 
 # ─── HTML TEMPLATE ────────────────────────────────────────────────────────────
@@ -699,15 +718,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .badge-dl        { background: #23201d; color: var(--text-soft); border: 1px solid #3a352f; }
 
     .size { color: var(--muted); font-size: 0.76rem; }
-    .actions a {
+    .actions {
+      white-space: nowrap;
+    }
+    .actions a,
+    .actions button {
       color: var(--text-soft);
-      text-decoration: none;
       font-size: 0.71rem;
-      margin-left: 0;
       margin-right: 14px;
+      margin-left: 0;
       transition: color 0.1s;
     }
-    .actions a:hover { color: var(--accent); }
+    .actions a {
+      text-decoration: none;
+    }
+    .actions button {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      transition: color 0.1s;
+    }
+    .actions a:hover,
+    .actions button:hover {
+      color: var(--accent);
+    }
+    .actions button.danger:hover {
+      color: var(--danger-fg);
+    }
 
     .empty {
       text-align: center;
@@ -811,7 +852,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         border-top: 1px solid var(--border-soft);
       }
 
-      .actions a {
+      .actions a,
+      .actions button {
         display: inline-block;
         margin-right: 16px;
         margin-bottom: 4px;
@@ -948,6 +990,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           {% if not e.is_dir %}
             <a href="/stream/{{ e.path }}" download>↓ download</a>
             {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank">⬡ raw</a>{% endif %}
+            <form method="post" action="/delete/{{ e.path }}" style="display:inline" onsubmit="return confirmDelete('{{ e.name|replace(\"'\", \"\\\\'\") }}')">
+              <button type="submit" class="danger">✕ delete</button>
+            </form>
           {% endif %}
         </td>
       </tr>
@@ -1131,6 +1176,10 @@ function formatTime(secs) {
   return h > 0
     ? h + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0')
     : m + ':' + String(s).padStart(2,'0');
+}
+
+function confirmDelete(name) {
+  return window.confirm('Delete "' + name + '"? This cannot be undone.');
 }
 </script>
 </body>

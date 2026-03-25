@@ -13,7 +13,7 @@ Built to run on anything, including Android via Termux.
 - **Custom video player** — play/pause, seek bar, skip buttons, volume control, fullscreen, and a buffering indicator. No browser default controls
 - **Image preview** — images open inline without downloading
 - **Smart routing** — the server automatically detects whether a file needs transcoding or can stream natively
-- **Directory browsing** — navigate folders, see file sizes, download anything
+- **Directory browsing** — navigate folders, see file sizes, download files, and delete files
 - **Termux-friendly** — runs on Android, your phone becomes the server
 
 ---
@@ -168,4 +168,3 @@ FFmpeg is optional — native formats (.mp4, .mp3, images) work without it. The 
 ## License
 
 Do whatever you want with it. This is a personal learning project.
-
