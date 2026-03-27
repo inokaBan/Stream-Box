@@ -277,6 +277,7 @@ def list_directory(rel_path: str, abs_path: Path):
             "icon":       _icon(item, mime),
             "streamable": streamable,
             "transcode":  transcode,
+            "thumbable":  item.is_file() and (mime.startswith("image/") or item.suffix.lower() in NATIVE_VIDEO_EXTS),
         })
 
     return entries
@@ -363,6 +364,8 @@ def delete(rel_path):
 
     parent = abs_path.parent.relative_to(MEDIA_ROOT.resolve())
     parent_path = "" if str(parent) == "." else str(parent)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"ok": True, "parent": parent_path}
     return redirect(url_for("browse", rel_path=parent_path))
 
 
@@ -471,6 +474,45 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
     .ffmpeg-ok  { background: var(--success-bg); color: var(--success-fg); border: 1px solid #274230; }
     .ffmpeg-off { background: var(--danger-bg); color: var(--danger-fg); border: 1px solid #523129; }
+    .view-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.015);
+    }
+    .view-btn {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.72;
+      transition: background 0.1s, color 0.1s, opacity 0.1s, box-shadow 0.1s;
+    }
+    .view-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .view-btn:hover {
+      opacity: 0.95;
+      color: var(--text-soft);
+    }
+    .view-btn.active {
+      opacity: 1;
+      color: var(--text-soft);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    }
 
     main {
       padding: var(--space-8) var(--space-7) 56px;
@@ -659,6 +701,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     }
 
     /* ── File table ── */
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
+
     table {
       width: 100%;
       border-collapse: separate;
@@ -719,15 +764,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
     .size { color: var(--muted); font-size: 0.76rem; }
     .actions {
-      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+    td.actions {
+      min-width: 190px;
     }
     .actions a,
     .actions button {
       color: var(--text-soft);
       font-size: 0.71rem;
-      margin-right: 14px;
-      margin-left: 0;
       transition: color 0.1s;
+    }
+    .actions form,
+    .card-actions form {
+      display: inline-flex;
+      align-items: center;
+      margin: 0;
     }
     .actions a {
       text-decoration: none;
@@ -747,6 +803,104 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       color: var(--accent);
     }
     .actions button.danger:hover {
+      color: var(--danger-fg);
+    }
+
+    /* ── Grid view ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: var(--space-5);
+    }
+    .card {
+      background: rgba(23, 26, 24, 0.84);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      min-height: 280px;
+    }
+    .card-preview {
+      position: relative;
+      aspect-ratio: 16 / 10;
+      background:
+        radial-gradient(circle at top, rgba(121, 201, 255, 0.16), transparent 45%),
+        linear-gradient(180deg, #1a1f1c 0%, #101311 100%);
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .card-preview img,
+    .card-preview video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-preview video {
+      pointer-events: none;
+      background: #000;
+    }
+    .card-icon {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.86rem;
+      letter-spacing: 0.08em;
+      color: var(--text-soft);
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.22);
+    }
+    .card-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+    .card-title {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.85rem;
+      word-break: break-word;
+    }
+    .card-title:hover { color: var(--accent); }
+    .card-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .card-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+      margin-top: auto;
+    }
+    .card-actions a,
+    .card-actions button {
+      color: var(--text-soft);
+      text-decoration: none;
+      font-size: 0.71rem;
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-family: inherit;
+      cursor: pointer;
+      transition: color 0.1s;
+    }
+    .card-actions a:hover,
+    .card-actions button:hover {
+      color: var(--accent);
+    }
+    .card-actions button.danger:hover {
       color: var(--danger-fg);
     }
 
@@ -786,6 +940,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         margin-left: 0;
         justify-content: flex-start;
       }
+
+      .view-toggle {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .view-btn { flex: 1; }
 
       .now-playing {
         margin-left: 0;
@@ -852,11 +1013,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         border-top: 1px solid var(--border-soft);
       }
 
-      .actions a,
-      .actions button {
-        display: inline-block;
-        margin-right: 16px;
-        margin-bottom: 4px;
+      .actions {
+        min-width: 0;
       }
     }
   </style>
@@ -866,6 +1024,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <header>
   <div class="logo">Stream<span>Box</span></div>
   <div class="header-right">
+    <div class="view-toggle" aria-label="View mode">
+      <button type="button" class="view-btn" data-view="list" onclick="setViewMode('list')" aria-label="List view" title="List view">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h4v4H4V6zm6 1h10v2H10V7zM4 14h4v4H4v-4zm6 1h10v2H10v-2z"/></svg>
+      </button>
+      <button type="button" class="view-btn active" data-view="grid" onclick="setViewMode('grid')" aria-label="Grid view" title="Grid view">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>
+      </button>
+    </div>
     {% if ffmpeg_ok %}
       <span class="ffmpeg-badge ffmpeg-ok">✓ ffmpeg</span>
     {% else %}
@@ -958,47 +1124,103 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </div><!-- /player-wrap -->
 
   {% if entries %}
-  <table>
-    <thead><tr><th>name</th><th>size</th><th>actions</th></tr></thead>
-    <tbody>
+  <section class="view-panel" id="view-list">
+    <table>
+      <thead><tr><th>name</th><th>size</th><th>actions</th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr data-entry-path="{{ e.path }}">
+          <td>
+            <span class="icon icon-{{ e.icon }}">
+              {% if e.icon in ['folder','folder-up'] %}DIR
+              {% elif e.icon == 'video' %}VID
+              {% elif e.icon == 'audio' %}AUD
+              {% elif e.icon == 'image' %}IMG
+              {% elif e.icon == 'text' %}TXT
+              {% else %}FILE{% endif %}
+            </span>
+            {% if e.is_dir %}
+              <a class="name-link" href="/browse/{{ e.path }}">{{ e.name }}</a>
+            {% else %}
+              <a class="name-link"
+                 {% if e.streamable %}onclick='openPlayer({{ e.path|tojson }}, {{ e.mime|tojson }}, {{ "true" if e.transcode else "false" }})'
+                 {% else %}href="/stream/{{ e.path }}"{% endif %}>
+                {{ e.name }}
+              </a>
+              {% if e.transcode %}<span class="badge badge-transcode">transcode</span>
+              {% elif e.streamable %}<span class="badge badge-native">native</span>
+              {% else %}<span class="badge badge-dl">download</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="size">{{ e.size }}</td>
+          <td class="actions">
+            {% if not e.is_dir %}
+              <a href="/stream/{{ e.path }}" download>↓ download</a>
+              {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank">⬡ raw</a>{% endif %}
+              <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" style="display:inline" onsubmit='return confirmDelete({{ e.name|tojson }})'>
+                <button type="submit" class="danger">✕ delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="view-panel active" id="view-grid">
+    <div class="grid">
     {% for e in entries %}
-      <tr>
-        <td>
-          <span class="icon icon-{{ e.icon }}">
-            {% if e.icon in ['folder','folder-up'] %}DIR
-            {% elif e.icon == 'video' %}VID
-            {% elif e.icon == 'audio' %}AUD
-            {% elif e.icon == 'image' %}IMG
-            {% elif e.icon == 'text' %}TXT
-            {% else %}FILE{% endif %}
-          </span>
+      <article class="card" data-entry-path="{{ e.path }}">
+        <div class="card-preview">
           {% if e.is_dir %}
-            <a class="name-link" href="/browse/{{ e.path }}">{{ e.name }}</a>
+            <div class="card-icon">DIR</div>
+          {% elif e.thumbable and e.mime.startswith('image/') %}
+            <img src="/stream/{{ e.path }}" alt="{{ e.name }}" loading="lazy"/>
+          {% elif e.thumbable and e.mime.startswith('video/') %}
+            <video src="/stream/{{ e.path }}" muted preload="metadata"></video>
+          {% elif e.icon == 'audio' %}
+            <div class="card-icon">AUD</div>
+          {% elif e.icon == 'video' %}
+            <div class="card-icon">VID</div>
+          {% elif e.icon == 'image' %}
+            <div class="card-icon">IMG</div>
+          {% elif e.icon == 'text' %}
+            <div class="card-icon">TXT</div>
           {% else %}
-            <a class="name-link"
-               {% if e.streamable %}onclick="openPlayer('{{ e.path }}', '{{ e.mime }}', {{ 'true' if e.transcode else 'false' }})"
-               {% else %}href="/stream/{{ e.path }}"{% endif %}>
-              {{ e.name }}
-            </a>
-            {% if e.transcode %}<span class="badge badge-transcode">transcode</span>
-            {% elif e.streamable %}<span class="badge badge-native">native</span>
-            {% else %}<span class="badge badge-dl">download</span>{% endif %}
+            <div class="card-icon">FILE</div>
           {% endif %}
-        </td>
-        <td class="size">{{ e.size }}</td>
-        <td class="actions">
+        </div>
+        <div class="card-body">
+          {% if e.is_dir %}
+            <a class="card-title" href="/browse/{{ e.path }}">{{ e.name }}</a>
+          {% elif e.streamable %}
+            <a class="card-title" href="#" onclick='openPlayer({{ e.path|tojson }}, {{ e.mime|tojson }}, {{ "true" if e.transcode else "false" }}); return false;'>{{ e.name }}</a>
+          {% else %}
+            <a class="card-title" href="/stream/{{ e.path }}">{{ e.name }}</a>
+          {% endif %}
+          <div class="card-meta">
+            <span>{{ e.size or 'folder' }}</span>
+            {% if not e.is_dir %}
+              {% if e.transcode %}<span class="badge badge-transcode">transcode</span>
+              {% elif e.streamable %}<span class="badge badge-native">native</span>
+              {% else %}<span class="badge badge-dl">download</span>{% endif %}
+            {% endif %}
+          </div>
           {% if not e.is_dir %}
-            <a href="/stream/{{ e.path }}" download>↓ download</a>
-            {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank">⬡ raw</a>{% endif %}
-            <form method="post" action="/delete/{{ e.path }}" style="display:inline" onsubmit="return confirmDelete('{{ e.name|replace(\"'\", \"\\\\'\") }}')">
-              <button type="submit" class="danger">✕ delete</button>
-            </form>
+            <div class="card-actions">
+              <a href="/stream/{{ e.path }}" download>↓ download</a>
+              {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank">⬡ raw</a>{% endif %}
+              <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" style="display:inline" onsubmit='return confirmDelete({{ e.name|tojson }})'>
+                <button type="submit" class="danger">✕ delete</button>
+              </form>
+            </div>
           {% endif %}
-        </td>
-      </tr>
+        </div>
+      </article>
     {% endfor %}
-    </tbody>
-  </table>
+    </div>
+  </section>
   {% else %}
   <div class="empty">
     <h2>No files found</h2>
@@ -1013,6 +1235,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 let currentPath  = null;
 let isTranscoded = false;
 const video      = document.getElementById('main-video');
+const VIEW_MODE_KEY = 'streambox:view-mode';
+
+applySavedViewMode();
 
 // ── Open player ────────────────────────────────────────────────────────────
 async function openPlayer(path, mime, transcode) {
@@ -1180,6 +1405,68 @@ function formatTime(secs) {
 
 function confirmDelete(name) {
   return window.confirm('Delete "' + name + '"? This cannot be undone.');
+}
+
+async function handleDeleteSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button[type="submit"]');
+  const path = form.dataset.entryPath;
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    const response = await fetch(form.action, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'fetch' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Delete failed');
+    }
+
+    document.querySelectorAll('[data-entry-path="' + CSS.escape(path) + '"]').forEach((node) => {
+      if (node.matches('tr, article.card')) {
+        node.remove();
+      }
+    });
+
+    const hasEntries = document.querySelector('[data-entry-path]');
+    if (!hasEntries) {
+      window.location.reload();
+    }
+  } catch (error) {
+    window.location.reload();
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
+}
+
+document.querySelectorAll('.delete-form').forEach((form) => {
+  form.addEventListener('submit', handleDeleteSubmit);
+});
+
+function setViewMode(mode) {
+  const normalized = mode === 'grid' ? 'grid' : 'list';
+  localStorage.setItem(VIEW_MODE_KEY, normalized);
+  applyViewMode(normalized);
+}
+
+function applySavedViewMode() {
+  applyViewMode(localStorage.getItem(VIEW_MODE_KEY) || 'grid');
+}
+
+function applyViewMode(mode) {
+  const showGrid = mode === 'grid';
+  document.getElementById('view-list').classList.toggle('active', !showGrid);
+  document.getElementById('view-grid').classList.toggle('active', showGrid);
+  document.querySelectorAll('.view-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === mode);
+  });
 }
 </script>
 </body>
