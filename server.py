@@ -524,180 +524,326 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     .player-wrap {
       display: none;
       margin-bottom: var(--space-7);
-      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
+      position: relative;
+      background:
+        radial-gradient(circle at top, rgba(120, 178, 255, 0.14), transparent 40%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 28px;
       overflow: hidden;
-      box-shadow: var(--shadow);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+      isolation: isolate;
     }
     .player-wrap.active { display: block; }
+    .player-wrap.player-fullscreen {
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+      margin: 0;
+      border: 0;
+      background: #000;
+    }
+
+    .player-stage {
+      position: relative;
+      background:
+        radial-gradient(circle at center, rgba(255,255,255,0.08), transparent 55%),
+        #040506;
+      min-height: min(60vh, 760px);
+    }
+    .player-wrap.player-fullscreen .player-stage {
+      min-height: 100vh;
+      height: 100vh;
+    }
 
     /* The actual <video> element — no native controls */
-    #main-video {
+    #main-video,
+    #img-viewer {
       width: 100%;
       display: block;
-      max-height: 60vh;
-      background: #000; cursor: pointer;
+      max-height: 76vh;
+      min-height: min(60vh, 760px);
+      object-fit: contain;
+      background: #000;
+    }
+    #img-viewer { display: none; }
+    .player-wrap.player-fullscreen #main-video,
+    .player-wrap.player-fullscreen #img-viewer {
+      max-height: 100vh;
+      min-height: 100vh;
     }
 
-    /* Image viewer */
-    #img-viewer {
-      display: none;
-      width: 100%;
-      max-height: 70vh;
-      object-fit: contain; background: #000;
-    }
-
-    /* ── Custom controls bar ── */
-    .ctrl-bar {
-      background: linear-gradient(180deg, rgba(11, 13, 12, 0.95), rgba(17, 20, 18, 0.98));
-      border-top: 1px solid var(--border-soft);
-      padding: var(--space-5);
-      display: none;
+    .player-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
       flex-direction: column;
-      gap: var(--space-4);
+      justify-content: space-between;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 0.24s ease;
     }
-    .ctrl-bar.show { display: flex; }
+    .player-wrap.chrome-hidden .player-overlay {
+      opacity: 0;
+    }
+    .player-wrap.chrome-hidden {
+      cursor: none;
+    }
 
-    /* Progress / seek row */
-    .progress-row { display: flex; align-items: center; gap: var(--space-3); }
-    .time-label {
-      font-size: 0.72rem;
-      color: var(--muted);
+    .player-top,
+    .player-bottom {
+      pointer-events: auto;
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0));
+    }
+    .player-bottom {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 16px;
+      background: linear-gradient(0deg, rgba(0,0,0,0.84), rgba(0,0,0,0));
+    }
+
+    .player-title-group {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .player-eyebrow {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(255,255,255,0.56);
+    }
+    .now-playing {
+      font-size: clamp(1rem, 1.5vw, 1.18rem);
+      color: #fff;
       white-space: nowrap;
-      min-width: 42px;
-      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+      max-width: min(70vw, 720px);
     }
-    .time-label.right { text-align: right; }
 
-    /* Custom progress bar */
-    .prog-track {
-      flex: 1;
-      height: 6px;
-      background: #2a312d;
+    .player-pill {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255,255,255,0.9);
       border-radius: 999px;
-      position: relative;
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+    }
+    .player-pill:hover {
+      transform: translateY(-1px) scale(1.01);
+      background: rgba(255,255,255,0.13);
+      border-color: rgba(255,255,255,0.22);
+    }
+
+    .close-btn,
+    .hud-btn,
+    .transport-btn {
       cursor: pointer;
-      transition: height 0.15s, transform 0.15s;
     }
-    .prog-track:hover { height: 8px; }
-    .prog-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+
+    .close-btn,
+    .hud-btn {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+    }
+    .close-btn {
+      margin-left: auto;
+      font-size: 1rem;
+    }
+    .hud-btn svg,
+    .transport-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .player-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      pointer-events: auto;
+      padding: 0 20px;
+    }
+
+    .transport-btn {
+      width: 64px;
+      height: 64px;
+      padding: 0;
+      color: #fff;
+    }
+    .transport-btn.primary {
+      width: 78px;
+      height: 78px;
+      background: rgba(255,255,255,0.16);
+      border-color: rgba(255,255,255,0.2);
+    }
+    .transport-btn svg {
+      width: 24px;
+      height: 24px;
+    }
+    .transport-btn.primary svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .time-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: rgba(255,255,255,0.82);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+    }
+    .time-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .time-label {
+      white-space: nowrap;
+      color: rgba(255,255,255,0.76);
+    }
+    .player-status {
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.52);
+      white-space: nowrap;
+    }
+
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .prog-track {
+      position: relative;
+      flex: 1;
+      height: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    .prog-rail {
+      position: absolute;
+      inset: 50% 0 auto;
+      height: 6px;
+      transform: translateY(-50%);
       border-radius: 999px;
-      width: 0%; pointer-events: none; transition: width 0.1s linear;
+      background: rgba(255,255,255,0.16);
+      overflow: hidden;
     }
-    .prog-buf {
-      position: absolute; top: 0; left: 0; height: 100%;
-      background: #465049; border-radius: 999px; pointer-events: none;
+    .prog-buf,
+    .prog-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      border-radius: inherit;
+      pointer-events: none;
+    }
+    .prog-buf { background: rgba(255,255,255,0.28); }
+    .prog-fill {
+      background: linear-gradient(90deg, #ffffff, #d9e9ff);
+      box-shadow: 0 0 28px rgba(255,255,255,0.2);
     }
     .prog-thumb {
-      position: absolute; top: 50%; right: -5px;
-      width: 12px; height: 12px; background: var(--accent);
-      border-radius: 50%; transform: translateY(-50%);
-      pointer-events: none; opacity: 0; transition: opacity 0.15s;
-      box-shadow: 0 0 0 3px rgba(216, 255, 90, 0.16);
+      position: absolute;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      margin-left: -7px;
+      transform: translateY(-50%);
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.12);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.18s ease, transform 0.18s ease;
     }
-    .prog-track:hover .prog-thumb { opacity: 1; }
-
-    /* Buttons row */
-    .btn-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
-
-    .ctrl-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--text-soft);
-      cursor: pointer;
-      font-size: 1rem;
-      min-width: 38px;
-      min-height: 38px;
-      padding: 0 10px;
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      transition: color 0.1s, background 0.1s, border-color 0.1s, transform 0.1s;
+    .prog-track:hover .prog-thumb,
+    .prog-track.dragging .prog-thumb {
+      opacity: 1;
+      transform: translateY(-50%) scale(1.04);
     }
-    .ctrl-btn:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.05);
-      border-color: var(--border);
-    }
-    .ctrl-btn:active { transform: translateY(1px); }
-    .ctrl-btn svg { width: 16px; height: 16px; fill: currentColor; }
 
-    /* Volume group */
+    .bottom-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .bottom-left,
+    .bottom-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hud-btn {
+      width: 46px;
+      height: 46px;
+      padding: 0;
+    }
+
     .vol-group {
       display: flex;
       align-items: center;
-      gap: var(--space-2);
-      padding: 4px 6px 4px 2px;
-      border: 1px solid var(--border-soft);
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.02);
+      gap: 10px;
+      padding: 0 12px;
+      min-height: 46px;
     }
-    .vol-slider {
-      width: 88px; height: 3px; accent-color: var(--accent);
-      cursor: pointer; opacity: 0.8;
+    .vol-slider,
+    .tc-slider {
+      width: 108px;
+      accent-color: #ffffff;
+      cursor: pointer;
     }
-    .vol-slider:hover { opacity: 1; }
 
-    /* Title + badge */
-    .now-playing {
-      font-size: 0.74rem; color: var(--muted);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      max-width: 360px; margin-left: auto;
-    }
-    .now-playing b { color: var(--text); font-weight: 500; }
-
-    /* Transcode seek row (shown only for .mkv etc.) */
     .tc-row {
       display: none;
       align-items: center;
-      gap: var(--space-3);
-      padding-top: var(--space-4);
-      border-top: 1px solid var(--border-soft);
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       flex-wrap: wrap;
     }
     .tc-row.show { display: flex; }
     .tc-label {
-      font-size: 0.68rem;
-      color: var(--muted);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.72);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
-    .tc-slider { flex: 1; accent-color: var(--accent2); cursor: pointer; }
+    .tc-slider { flex: 1; min-width: 140px; }
     .tc-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.68rem;
-      padding: 8px 12px;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: border-color 0.1s, color 0.1s, background 0.1s;
-    }
-    .tc-btn:hover { border-color: var(--accent2); color: var(--accent2); background: var(--surface-soft); }
-
-    /* Close button */
-    .player-close-row {
-      display: flex; justify-content: flex-end;
-      padding: 6px 14px 0;
-    }
-    .close-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 0.7rem;
-      font-family: 'IBM Plex Mono', monospace;
-      padding: 8px 10px;
-      border-radius: 10px;
-      transition: color 0.1s, background 0.1s, border-color 0.1s;
-    }
-    .close-btn:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.04);
-      border-color: var(--border);
+      min-height: 40px;
+      padding: 0 16px;
+      font-size: 0.74rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     /* ── File table ── */
@@ -1045,83 +1191,85 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   <!-- ── Player ── -->
   <div class="player-wrap" id="player-wrap">
+    <div class="player-stage" id="player-stage">
+      <video id="main-video" preload="metadata"></video>
+      <img id="img-viewer" alt="preview"/>
 
-    <!-- Video element (no controls attr — we build our own) -->
-    <video id="main-video" preload="metadata"></video>
-    <!-- Image viewer -->
-    <img id="img-viewer" alt="preview"/>
+      <div class="player-overlay" id="player-overlay">
+        <div class="player-top">
+          <div class="player-title-group">
+            <span class="player-eyebrow" id="player-eyebrow">Now Playing</span>
+            <span class="now-playing" id="now-playing"></span>
+          </div>
+          <button class="close-btn player-pill" onclick="closePlayer()" title="Close player">✕</button>
+        </div>
 
-    <!-- Custom controls -->
-    <div class="ctrl-bar" id="ctrl-bar">
+        <div class="player-center" id="player-center">
+          <button class="transport-btn player-pill" onclick="skip(-10)" title="Back 10 seconds">
+            <svg viewBox="0 0 24 24"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
+          </button>
+          <button class="transport-btn primary player-pill" id="btn-play" onclick="togglePlay()" title="Play or pause">
+            <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <button class="transport-btn player-pill" onclick="skip(10)" title="Forward 10 seconds">
+            <svg viewBox="0 0 24 24"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
+          </button>
+        </div>
 
-      <!-- Close + now playing -->
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button class="close-btn" onclick="closePlayer()">✕ close</button>
-        <span class="now-playing" id="now-playing"></span>
-      </div>
+        <div class="player-bottom" id="ctrl-bar">
+          <div class="time-row">
+            <div class="time-meta">
+              <span class="time-label" id="time-cur">0:00</span>
+              <span class="time-label" id="time-dur">--:--</span>
+            </div>
+            <span class="player-status" id="player-status">Ready</span>
+          </div>
 
-      <!-- Progress bar -->
-      <div class="progress-row">
-        <span class="time-label" id="time-cur">0:00</span>
-        <div class="prog-track" id="prog-track">
-          <div class="prog-buf"   id="prog-buf"></div>
-          <div class="prog-fill"  id="prog-fill">
-            <div class="prog-thumb"></div>
+          <div class="progress-row">
+            <div class="prog-track" id="prog-track">
+              <div class="prog-rail">
+                <div class="prog-buf" id="prog-buf"></div>
+                <div class="prog-fill" id="prog-fill"></div>
+              </div>
+              <div class="prog-thumb" id="prog-thumb"></div>
+            </div>
+          </div>
+
+          <div class="bottom-controls">
+            <div class="bottom-left">
+              <button class="hud-btn player-pill" id="btn-mute" onclick="toggleMute()" title="Mute">
+                <svg id="icon-vol-high" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm10.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zm2.5 0c0 2.42-1.38 4.5-3.39 5.51v2.04C17.66 18.44 20 15.5 20 12s-2.34-6.44-5.89-7.55v2.04C17.12 7.5 18.5 9.58 18.5 12z"/></svg>
+                <svg id="icon-vol-low" viewBox="0 0 24 24" style="display:none"><path d="M3 9v6h4l5 5V4L7 9H3zm10.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                <svg id="icon-mute" viewBox="0 0 24 24" style="display:none"><path d="M4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+              </button>
+              <div class="vol-group player-pill">
+                <input type="range" class="vol-slider" id="vol-slider"
+                       min="0" max="1" step="0.05" value="1"
+                       oninput="setVolume(this.value)"/>
+              </div>
+            </div>
+
+            <div class="bottom-right">
+              <button class="hud-btn player-pill" onclick="toggleFullscreen()" title="Toggle fullscreen">
+                <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="tc-row" id="tc-row">
+            <span class="tc-label">Transcode seek</span>
+            <span class="tc-label" id="tc-cur">0:00</span>
+            <input type="range" class="tc-slider" id="tc-slider"
+                   min="0" max="100" value="0" step="1"
+                   oninput="document.getElementById('tc-cur').textContent = formatTime(this.value)"/>
+            <span class="tc-label" id="tc-dur">--:--</span>
+            <button class="tc-btn player-pill" onclick="seekTranscode()">Go</button>
           </div>
         </div>
-        <span class="time-label right" id="time-dur">--:--</span>
       </div>
-
-      <!-- Buttons row -->
-      <div class="btn-row">
-
-        <!-- Play/Pause -->
-        <button class="ctrl-btn" id="btn-play" onclick="togglePlay()" title="Play/Pause">
-          <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-        </button>
-
-        <!-- Skip back 10s -->
-        <button class="ctrl-btn" onclick="skip(-10)" title="-10s">
-          <svg viewBox="0 0 24 24"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
-        </button>
-
-        <!-- Skip forward 10s -->
-        <button class="ctrl-btn" onclick="skip(10)" title="+10s">
-          <svg viewBox="0 0 24 24"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
-        </button>
-
-        <!-- Volume -->
-        <div class="vol-group">
-          <button class="ctrl-btn" id="btn-mute" onclick="toggleMute()" title="Mute">
-            <svg id="icon-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
-            <svg id="icon-mute" viewBox="0 0 24 24" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
-          </button>
-          <input type="range" class="vol-slider" id="vol-slider"
-                 min="0" max="1" step="0.05" value="1"
-                 oninput="setVolume(this.value)"/>
-        </div>
-
-        <!-- Fullscreen -->
-        <button class="ctrl-btn" onclick="toggleFullscreen()" title="Fullscreen" style="margin-left:auto">
-          <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
-        </button>
-
-      </div>
-
-      <!-- Transcode seek row (only for .mkv etc.) -->
-      <div class="tc-row" id="tc-row">
-        <span class="tc-label">jump to:</span>
-        <span class="tc-label" id="tc-cur">0:00</span>
-        <input type="range" class="tc-slider" id="tc-slider"
-               min="0" max="100" value="0" step="1"
-               oninput="document.getElementById('tc-cur').textContent = formatTime(this.value)"/>
-        <span class="tc-label" id="tc-dur">--:--</span>
-        <button class="tc-btn" onclick="seekTranscode()">⏎ go</button>
-      </div>
-
-    </div><!-- /ctrl-bar -->
-  </div><!-- /player-wrap -->
+    </div>
+  </div>
 
   {% if entries %}
   <section class="view-panel" id="view-list">
@@ -1235,6 +1383,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 let currentPath  = null;
 let isTranscoded = false;
 const video      = document.getElementById('main-video');
+const playerWrap = document.getElementById('player-wrap');
+const playerStage = document.getElementById('player-stage');
+const imgViewer = document.getElementById('img-viewer');
+const progressTrack = document.getElementById('prog-track');
+const progressFill = document.getElementById('prog-fill');
+const progressBuf = document.getElementById('prog-buf');
+const progressThumb = document.getElementById('prog-thumb');
+const playerStatus = document.getElementById('player-status');
+const nowPlaying = document.getElementById('now-playing');
+const playerEyebrow = document.getElementById('player-eyebrow');
+let hideChromeTimer = null;
+let isScrubbing = false;
+let wasPlayingBeforeScrub = false;
 const VIEW_MODE_KEY = 'streambox:view-mode';
 
 applySavedViewMode();
@@ -1244,32 +1405,43 @@ async function openPlayer(path, mime, transcode) {
   currentPath  = path;
   isTranscoded = transcode;
 
-  const wrap   = document.getElementById('player-wrap');
   const ctrlBar = document.getElementById('ctrl-bar');
-  const imgEl  = document.getElementById('img-viewer');
-  const nowPlaying = document.getElementById('now-playing');
+  const filename = path.split('/').pop();
 
-  // Filename for display
-  nowPlaying.innerHTML = '<b>' + path.split('/').pop() + '</b>';
+  nowPlaying.textContent = filename;
+  playerEyebrow.textContent = mime.startsWith('image/') ? 'Preview' : (transcode ? 'Streaming with Transcode' : 'Now Playing');
+  playerStatus.textContent = transcode ? 'Transcoding' : 'Ready';
+  playerWrap.classList.remove('chrome-hidden');
+  clearHideChromeTimer();
 
   if (mime.startsWith('image/')) {
+    video.pause();
+    video.src = '';
     video.style.display  = 'none';
-    imgEl.style.display  = 'block';
-    imgEl.src            = '/stream/' + path;
-    ctrlBar.classList.remove('show');
+    imgViewer.style.display  = 'block';
+    imgViewer.src            = '/stream/' + path;
+    document.getElementById('player-center').style.display = 'none';
+    ctrlBar.style.display = 'none';
   } else {
     video.style.display  = 'block';
-    imgEl.style.display  = 'none';
-    ctrlBar.classList.add('show');
+    imgViewer.style.display  = 'none';
+    document.getElementById('player-center').style.display = '';
+    ctrlBar.style.display = '';
     loadVideo('/stream/' + path, mime, transcode);
+    armChromeAutoHide();
   }
 
-  wrap.classList.add('active');
-  wrap.scrollIntoView({ behavior: 'smooth' });
+  playerWrap.classList.add('active');
+  playerWrap.scrollIntoView({ behavior: 'smooth' });
 }
 
 // ── Load video source ───────────────────────────────────────────────────────
 function loadVideo(url, mime, transcode) {
+  playerStatus.textContent = transcode ? 'Transcoding' : 'Loading';
+  progressFill.style.width = '0%';
+  progressBuf.style.width = '0%';
+  progressThumb.style.left = '0%';
+  document.getElementById('time-cur').textContent = '0:00';
   video.src = url;
   video.load();
   video.play().catch(() => {});  // autoplay
@@ -1292,7 +1464,9 @@ function loadVideo(url, mime, transcode) {
 
 // ── Playback controls ───────────────────────────────────────────────────────
 function togglePlay() {
+  if (!currentPath) return;
   video.paused ? video.play() : video.pause();
+  armChromeAutoHide();
 }
 
 function skip(secs) {
@@ -1307,26 +1481,31 @@ function setVolume(v) {
   video.volume = v;
   video.muted  = (v == 0);
   updateMuteIcon();
+  armChromeAutoHide();
 }
 
 function toggleMute() {
   video.muted = !video.muted;
   document.getElementById('vol-slider').value = video.muted ? 0 : video.volume;
   updateMuteIcon();
+  armChromeAutoHide();
 }
 
 function updateMuteIcon() {
-  document.getElementById('icon-vol').style.display  = video.muted ? 'none' : '';
-  document.getElementById('icon-mute').style.display = video.muted ? '' : 'none';
+  const showMute = video.muted || video.volume === 0;
+  const showLow = !showMute && video.volume < 0.5;
+  document.getElementById('icon-vol-high').style.display = (!showMute && !showLow) ? '' : 'none';
+  document.getElementById('icon-vol-low').style.display  = showLow ? '' : 'none';
+  document.getElementById('icon-mute').style.display     = showMute ? '' : 'none';
 }
 
 function toggleFullscreen() {
-  const wrap = document.getElementById('player-wrap');
   if (!document.fullscreenElement) {
-    wrap.requestFullscreen().catch(() => video.requestFullscreen());
+    playerWrap.requestFullscreen().catch(() => video.requestFullscreen());
   } else {
     document.exitFullscreen();
   }
+  armChromeAutoHide();
 }
 
 // Transcode seek — restarts FFmpeg from chosen timestamp
@@ -1334,20 +1513,28 @@ function seekTranscode() {
   if (!currentPath || !isTranscoded) return;
   const t = document.getElementById('tc-slider').value;
   loadVideo('/stream/' + currentPath + '?t=' + t, 'video/mp4', true);
+  playerStatus.textContent = 'Jumped';
 }
 
 // ── Close ───────────────────────────────────────────────────────────────────
 function closePlayer() {
+  if (document.fullscreenElement === playerWrap) {
+    document.exitFullscreen().catch(() => {});
+  }
   video.pause();
   video.src = '';
-  document.getElementById('img-viewer').src = '';
-  document.getElementById('player-wrap').classList.remove('active');
-  document.getElementById('ctrl-bar').classList.remove('show');
+  imgViewer.src = '';
+  imgViewer.style.display = 'none';
+  playerWrap.classList.remove('active', 'chrome-hidden', 'player-fullscreen');
+  document.getElementById('ctrl-bar').style.display = '';
   document.getElementById('tc-row').classList.remove('show');
-  document.getElementById('prog-fill').style.width = '0%';
-  document.getElementById('prog-buf').style.width  = '0%';
+  progressFill.style.width = '0%';
+  progressBuf.style.width  = '0%';
+  progressThumb.style.left = '0%';
   document.getElementById('time-cur').textContent  = '0:00';
   document.getElementById('time-dur').textContent  = '--:--';
+  playerStatus.textContent = 'Ready';
+  clearHideChromeTimer();
   currentPath = null; isTranscoded = false;
 }
 
@@ -1355,7 +1542,8 @@ function closePlayer() {
 video.addEventListener('timeupdate', () => {
   if (!video.duration) return;
   const pct = (video.currentTime / video.duration) * 100;
-  document.getElementById('prog-fill').style.width = pct + '%';
+  progressFill.style.width = pct + '%';
+  progressThumb.style.left = pct + '%';
   document.getElementById('time-cur').textContent  = formatTime(video.currentTime);
 });
 
@@ -1367,7 +1555,7 @@ video.addEventListener('durationchange', () => {
 video.addEventListener('progress', () => {
   if (video.buffered.length && video.duration) {
     const end = video.buffered.end(video.buffered.length - 1);
-    document.getElementById('prog-buf').style.width = (end / video.duration * 100) + '%';
+    progressBuf.style.width = (end / video.duration * 100) + '%';
   }
 });
 
@@ -1375,21 +1563,118 @@ video.addEventListener('progress', () => {
 video.addEventListener('play',  () => {
   document.getElementById('icon-play').style.display  = 'none';
   document.getElementById('icon-pause').style.display = '';
+  playerStatus.textContent = isTranscoded ? 'Streaming' : 'Playing';
+  armChromeAutoHide();
 });
 video.addEventListener('pause', () => {
   document.getElementById('icon-play').style.display  = '';
   document.getElementById('icon-pause').style.display = 'none';
+  playerStatus.textContent = 'Paused';
+  showChrome();
+});
+video.addEventListener('waiting', () => {
+  playerStatus.textContent = isTranscoded ? 'Buffering transcode' : 'Buffering';
+});
+video.addEventListener('ended', () => {
+  playerStatus.textContent = 'Finished';
+  showChrome();
+});
+video.addEventListener('loadedmetadata', () => {
+  document.getElementById('time-dur').textContent = formatTime(video.duration);
 });
 
 // Click video to play/pause
 video.addEventListener('click', togglePlay);
 
-// ── Click on progress bar to seek ───────────────────────────────────────────
-document.getElementById('prog-track').addEventListener('click', function(e) {
+// ── Progress bar seek / scrub ───────────────────────────────────────────────
+function updateProgressFromClientX(clientX) {
   if (!video.duration || isTranscoded) return;
-  const rect = this.getBoundingClientRect();
-  const pct  = (e.clientX - rect.left) / rect.width;
-  video.currentTime = pct * video.duration;
+  const rect = progressTrack.getBoundingClientRect();
+  const pct = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+  progressFill.style.width = (pct * 100) + '%';
+  progressThumb.style.left = (pct * 100) + '%';
+  document.getElementById('time-cur').textContent = formatTime(video.duration * pct);
+  video.currentTime = video.duration * pct;
+}
+
+progressTrack.addEventListener('pointerdown', (event) => {
+  if (!video.duration || isTranscoded) return;
+  isScrubbing = true;
+  wasPlayingBeforeScrub = !video.paused;
+  progressTrack.classList.add('dragging');
+  showChrome();
+  updateProgressFromClientX(event.clientX);
+});
+
+window.addEventListener('pointermove', (event) => {
+  if (!isScrubbing) return;
+  updateProgressFromClientX(event.clientX);
+});
+
+window.addEventListener('pointerup', () => {
+  if (!isScrubbing) return;
+  isScrubbing = false;
+  progressTrack.classList.remove('dragging');
+  if (wasPlayingBeforeScrub) {
+    video.play().catch(() => {});
+  }
+  armChromeAutoHide();
+});
+
+// ── Player chrome behavior ──────────────────────────────────────────────────
+function clearHideChromeTimer() {
+  if (hideChromeTimer) {
+    window.clearTimeout(hideChromeTimer);
+    hideChromeTimer = null;
+  }
+}
+
+function showChrome() {
+  if (!playerWrap.classList.contains('active')) return;
+  playerWrap.classList.remove('chrome-hidden');
+  clearHideChromeTimer();
+}
+
+function armChromeAutoHide() {
+  if (!playerWrap.classList.contains('active') || video.paused || isScrubbing || imgViewer.style.display === 'block') {
+    return;
+  }
+  showChrome();
+  hideChromeTimer = window.setTimeout(() => {
+    if (!video.paused && !isScrubbing) {
+      playerWrap.classList.add('chrome-hidden');
+    }
+  }, 2200);
+}
+
+['mousemove', 'pointermove', 'touchstart'].forEach((eventName) => {
+  playerStage.addEventListener(eventName, armChromeAutoHide, { passive: true });
+});
+
+document.addEventListener('fullscreenchange', () => {
+  playerWrap.classList.toggle('player-fullscreen', document.fullscreenElement === playerWrap);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (!playerWrap.classList.contains('active') || imgViewer.style.display === 'block') return;
+  if (event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    togglePlay();
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    skip(-10);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    skip(10);
+  } else if (event.key === 'f' || event.key === 'F' || event.key === 'Enter') {
+    event.preventDefault();
+    toggleFullscreen();
+  } else if (event.key === 'm' || event.key === 'M') {
+    event.preventDefault();
+    toggleMute();
+  } else if (event.key === 'Escape') {
+    closePlayer();
+  }
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
