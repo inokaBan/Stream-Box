@@ -986,9 +986,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       height: 100%;
       object-fit: cover;
       display: block;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
     }
     .card-preview video {
-      pointer-events: none;
       background: #000;
     }
     .card-icon {
@@ -1319,8 +1321,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <section class="view-panel active" id="view-grid">
     <div class="grid">
     {% for e in entries %}
-      <article class="card" data-entry-path="{{ e.path }}">
-        <div class="card-preview">
+      <article class="card"
+               data-entry-path="{{ e.path }}"
+               {% if e.streamable %}onclick='openPlayer({{ e.path|tojson }}, {{ e.mime|tojson }}, {{ "true" if e.transcode else "false" }})' style="cursor:pointer"{% endif %}>
+        <div class="card-preview" {% if e.streamable %}onclick='openPlayer({{ e.path|tojson }}, {{ e.mime|tojson }}, {{ "true" if e.transcode else "false" }})'{% endif %}>
           {% if e.is_dir %}
             <div class="card-icon">DIR</div>
           {% elif e.thumbable and e.mime.startswith('image/') %}
@@ -1357,9 +1361,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
           {% if not e.is_dir %}
             <div class="card-actions">
-              <a href="/stream/{{ e.path }}" download>↓ download</a>
-              {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank">⬡ raw</a>{% endif %}
-              <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" style="display:inline" onsubmit='return confirmDelete({{ e.name|tojson }})'>
+              <a href="/stream/{{ e.path }}" download onclick="event.stopPropagation()">↓ download</a>
+              {% if e.streamable %}<a href="/stream/{{ e.path }}" target="_blank" onclick="event.stopPropagation()">⬡ raw</a>{% endif %}
+              <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" style="display:inline" onsubmit='event.stopPropagation(); return confirmDelete({{ e.name|tojson }})'>
                 <button type="submit" class="danger">✕ delete</button>
               </form>
             </div>
