@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>StreamBox</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}"/>
+</head>
+<body>
+
+<header>
+  <div class="logo">Stream<span>Box</span></div>
+  {% if page_mode == 'detail' %}
+    <a class="header-back" href="{% if media.parent_path %}/browse/{{ media.parent_path }}{% else %}/{% endif %}">← back to folder</a>
+  {% endif %}
+  <div class="header-right">
+    {% if page_mode == 'browse' %}
+      <div class="view-toggle" aria-label="View mode">
+        <button type="button" class="view-btn" data-view="list" onclick="setViewMode('list')" aria-label="List view" title="List view">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h4v4H4V6zm6 1h10v2H10V7zM4 14h4v4H4v-4zm6 1h10v2H10v-2z"/></svg>
+        </button>
+        <button type="button" class="view-btn active" data-view="grid" onclick="setViewMode('grid')" aria-label="Grid view" title="Grid view">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z"/></svg>
+        </button>
+      </div>
+    {% endif %}
+    {% if ffmpeg_ok %}
+      <span class="ffmpeg-badge ffmpeg-ok">✓ ffmpeg</span>
+    {% else %}
+      <span class="ffmpeg-badge ffmpeg-off">✗ ffmpeg missing</span>
+    {% endif %}
+    <div class="breadcrumb">path: <b>{{ current_path }}</b></div>
+  </div>
+</header>
+
+<main>
+  <div class="player-wrap{% if page_mode == 'detail' %} active detail-player{% endif %}" id="player-wrap">
+    <div class="player-stage" id="player-stage">
+      <video id="main-video" preload="metadata"></video>
+      <img id="img-viewer" alt="preview"/>
+
+      <div class="player-overlay" id="player-overlay">
+        <div class="player-top">
+          <div class="player-title-group">
+            <span class="player-eyebrow" id="player-eyebrow">Now Playing</span>
+            <span class="now-playing" id="now-playing"></span>
+          </div>
+          {% if page_mode == 'browse' %}
+            <button class="close-btn player-pill" onclick="closePlayer()" title="Close player">✕</button>
+          {% endif %}
+        </div>
+
+        <div class="player-center" id="player-center">
+          <button class="transport-btn player-pill" onclick="skip(-10)" title="Back 10 seconds">
+            <svg viewBox="0 0 24 24"><path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
+          </button>
+          <button class="transport-btn primary player-pill" id="btn-play" onclick="togglePlay()" title="Play or pause">
+            <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <button class="transport-btn player-pill" onclick="skip(10)" title="Forward 10 seconds">
+            <svg viewBox="0 0 24 24"><path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/><text x="7.5" y="15.5" font-size="5" fill="currentColor" font-family="monospace">10</text></svg>
+          </button>
+        </div>
+
+        <div class="player-bottom" id="ctrl-bar">
+          <div class="time-row">
+            <div class="time-meta">
+              <span class="time-label" id="time-cur">0:00</span>
+              <span class="time-label" id="time-dur">--:--</span>
+            </div>
+            <span class="player-status" id="player-status">Ready</span>
+          </div>
+
+          <div class="progress-row">
+            <div class="prog-track" id="prog-track">
+              <div class="prog-rail">
+                <div class="prog-buf" id="prog-buf"></div>
+                <div class="prog-fill" id="prog-fill"></div>
+              </div>
+              <div class="prog-thumb" id="prog-thumb"></div>
+            </div>
+          </div>
+
+          <div class="bottom-controls">
+            <div class="bottom-left">
+              <button class="hud-btn player-pill" id="btn-mute" onclick="toggleMute()" title="Mute">
+                <svg id="icon-vol-high" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm10.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zm2.5 0c0 2.42-1.38 4.5-3.39 5.51v2.04C17.66 18.44 20 15.5 20 12s-2.34-6.44-5.89-7.55v2.04C17.12 7.5 18.5 9.58 18.5 12z"/></svg>
+                <svg id="icon-vol-low" viewBox="0 0 24 24" style="display:none"><path d="M3 9v6h4l5 5V4L7 9H3zm10.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+                <svg id="icon-mute" viewBox="0 0 24 24" style="display:none"><path d="M4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></svg>
+              </button>
+              <div class="vol-group player-pill">
+                <input type="range" class="vol-slider" id="vol-slider" min="0" max="1" step="0.05" value="1" oninput="setVolume(this.value)"/>
+              </div>
+            </div>
+
+            <div class="bottom-right">
+              <button class="hud-btn player-pill" onclick="toggleFullscreen()" title="Toggle fullscreen">
+                <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="tc-row" id="tc-row">
+            <span class="tc-label">Transcode seek</span>
+            <span class="tc-label" id="tc-cur">0:00</span>
+            <input type="range" class="tc-slider" id="tc-slider" min="0" max="100" value="0" step="1" oninput="document.getElementById('tc-cur').textContent = formatTime(this.value)"/>
+            <span class="tc-label" id="tc-dur">--:--</span>
+            <button class="tc-btn player-pill" onclick="seekTranscode()">Go</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if page_mode == 'detail' %}
+  <section class="media-detail">
+    <div class="media-info-panel">
+      <div class="media-kicker">Now streaming</div>
+      <h1 class="media-title">{{ media.title }}</h1>
+      <div class="media-meta-row">
+        <span class="media-chip">{{ media.size }}</span>
+        <span class="media-chip">{{ media.format }}</span>
+        <span class="media-chip {% if media.transcode %}badge-transcode{% else %}badge-native{% endif %}">
+          {% if media.transcode %}transcode{% else %}native{% endif %}
+        </span>
+        {% if media.is_video %}
+          <span class="media-chip duration-chip" id="media-duration">duration --:--</span>
+        {% endif %}
+      </div>
+      {% if media.transcode %}
+        <p class="media-note">Transcoded on playback</p>
+      {% endif %}
+    </div>
+
+    <section class="shelf">
+      <div class="shelf-head">
+        <h2 class="shelf-title">More from this folder</h2>
+        <p class="shelf-subtitle">{{ current_path }}</p>
+      </div>
+      {% if related_entries %}
+        <div class="media-rail">
+          {% for e in related_entries %}
+            <article class="rail-card">
+              <a class="rail-link" href="/view/{{ e.path }}">
+                <div class="rail-thumb">
+                  <img src="/thumb/{{ e.path }}" alt="{{ e.name }}" loading="lazy"/>
+                </div>
+                <div class="rail-body">
+                  <div class="rail-title">{{ e.name }}</div>
+                  <div class="rail-meta">
+                    <span>{{ e.size }}</span>
+                    <span>{{ e.name.rsplit('.', 1)[-1].upper() }}</span>
+                  </div>
+                </div>
+              </a>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="shelf-empty">No other streamable files in this folder.</p>
+      {% endif %}
+    </section>
+  </section>
+  {% elif entries %}
+  <section class="view-panel" id="view-list">
+    <table>
+      <thead><tr><th>name</th><th>size</th><th>actions</th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr data-entry-path="{{ e.path }}">
+          <td>
+            <span class="icon icon-{{ e.icon }}">
+              {% if e.icon in ['folder','folder-up'] %}DIR
+              {% elif e.icon == 'video' %}VID
+              {% elif e.icon == 'audio' %}AUD
+              {% elif e.icon == 'image' %}IMG
+              {% elif e.icon == 'text' %}TXT
+              {% else %}FILE{% endif %}
+            </span>
+            {% if e.is_dir %}
+              <a class="name-link" href="/browse/{{ e.path }}">{{ e.name }}</a>
+            {% else %}
+              <a class="name-link" href="{% if e.streamable %}/view/{{ e.path }}{% else %}/stream/{{ e.path }}{% endif %}">{{ e.name }}</a>
+              {% if e.transcode %}<span class="badge badge-transcode">transcode</span>
+              {% elif e.streamable %}<span class="badge badge-native">native</span>
+              {% else %}<span class="badge badge-dl">download</span>{% endif %}
+            {% endif %}
+          </td>
+          <td class="size">{{ e.size }}</td>
+          <td class="actions">
+            {% if not e.is_dir %}
+              <div class="action-menu" onclick="event.stopPropagation()">
+                <details class="menu-popover">
+                  <summary class="menu-trigger" aria-label="More actions for {{ e.name }}" title="More actions">
+                    <span class="menu-dots">⋮</span>
+                  </summary>
+                  <div class="menu-list">
+                    <a class="menu-item" href="/stream/{{ e.path }}" download>Download</a>
+                    {% if e.streamable %}<a class="menu-item" href="/stream/{{ e.path }}" target="_blank" rel="noopener noreferrer">Open raw</a>{% endif %}
+                    <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" data-entry-name="{{ e.name }}">
+                      <button type="submit" class="menu-item danger">Delete</button>
+                    </form>
+                  </div>
+                </details>
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="view-panel active" id="view-grid">
+    <div class="grid">
+    {% for e in entries %}
+      <article class="card" data-entry-path="{{ e.path }}" {% if e.streamable %}onclick='window.location.href={{ ("/view/" ~ e.path)|tojson }}' style="cursor:pointer"{% endif %}>
+        <div class="card-preview" {% if e.streamable %}onclick='window.location.href={{ ("/view/" ~ e.path)|tojson }}'{% endif %}>
+          {% if e.is_dir %}
+            <div class="card-icon">DIR</div>
+          {% elif e.thumbable and e.mime.startswith('image/') %}
+            <img src="/stream/{{ e.path }}" alt="{{ e.name }}" loading="lazy"/>
+          {% elif e.thumbable and e.mime.startswith('video/') %}
+            <video src="/stream/{{ e.path }}" muted preload="metadata"></video>
+          {% elif e.icon == 'audio' %}
+            <div class="card-icon">AUD</div>
+          {% elif e.icon == 'video' %}
+            <div class="card-icon">VID</div>
+          {% elif e.icon == 'image' %}
+            <div class="card-icon">IMG</div>
+          {% elif e.icon == 'text' %}
+            <div class="card-icon">TXT</div>
+          {% else %}
+            <div class="card-icon">FILE</div>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          {% if e.is_dir %}
+            <a class="card-title" href="/browse/{{ e.path }}">{{ e.name }}</a>
+          {% elif e.streamable %}
+            <a class="card-title" href="/view/{{ e.path }}">{{ e.name }}</a>
+          {% else %}
+            <a class="card-title" href="/stream/{{ e.path }}">{{ e.name }}</a>
+          {% endif %}
+          <div class="card-meta">
+            <span>{{ e.size or 'folder' }}</span>
+            {% if not e.is_dir %}
+              {% if e.transcode %}<span class="badge badge-transcode">transcode</span>
+              {% elif e.streamable %}<span class="badge badge-native">native</span>
+              {% else %}<span class="badge badge-dl">download</span>{% endif %}
+            {% endif %}
+          </div>
+          {% if not e.is_dir %}
+            <div class="card-actions">
+              <div class="action-menu" onclick="event.stopPropagation()">
+                <details class="menu-popover">
+                  <summary class="menu-trigger" aria-label="More actions for {{ e.name }}" title="More actions">
+                    <span class="menu-dots">⋮</span>
+                  </summary>
+                  <div class="menu-list">
+                    <a class="menu-item" href="/stream/{{ e.path }}" download onclick="event.stopPropagation()">Download</a>
+                    {% if e.streamable %}<a class="menu-item" href="/stream/{{ e.path }}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open raw</a>{% endif %}
+                    <form method="post" action="/delete/{{ e.path }}" class="delete-form" data-entry-path="{{ e.path }}" data-entry-name="{{ e.name }}">
+                      <button type="submit" class="menu-item danger">Delete</button>
+                    </form>
+                  </div>
+                </details>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <div class="empty">
+    <h2>No files found</h2>
+    <p>Add files to the <code>./media</code> folder and refresh.</p>
+  </div>
+  {% endif %}
+</main>
+
+<script>
+  window.STREAMBOX_BOOTSTRAP = {
+    pageMode: {{ page_mode|tojson }},
+    media: {{ media|tojson }}
+  };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
